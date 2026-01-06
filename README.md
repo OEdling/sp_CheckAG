@@ -43,7 +43,7 @@ Although you can simply execute it as is, there are currently five parameters.<p
 
 **2 - Medium**. This is the stuff that can complicate availability that we recommend you review.<p>
 
-**3 – Low**. tuff you may have enabled that you may or may not need.<p>
+**3 – Low**. This is the stuff you may have enabled that you may or may not need.<p>
 
 # What are the requirements to use sp_CheckAG?
 
