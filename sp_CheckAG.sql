@@ -20,8 +20,8 @@ DECLARE
 	, @VersionDate DATETIME = NULL
 
 SELECT
-    @Version = '1.0'
-    , @VersionDate = '20251230';
+    @Version = '1.1'
+    , @VersionDate = '20260112';
 
 
 /* Version check */
@@ -79,7 +79,7 @@ For Mode 1 and 99, the following result sets will be displayed
     	
     All copyrights for sp_CheckAG are held by Straight Path Solutions.
     
-    Copyright 2025 Straight Path IT Solutions, LLC
+    Copyright 2026 Straight Path IT Solutions, LLC
     
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -819,7 +819,7 @@ SELECT
 		WHEN 1 THEN 'Yes'
 		ELSE 'No' END AS IsFailoverReady
 	, SUSER_SNAME(owner_sid) AS DatabaseOwner
-	, dbrs.secondary_lag_seconds
+	, NULL 
 FROM master.sys.availability_groups AS ag
 LEFT OUTER JOIN master.sys.dm_hadr_availability_group_states as ags
 	ON ag.group_id = ags.group_id
@@ -834,6 +834,15 @@ LEFT JOIN master.sys.dm_hadr_database_replica_states AS dbrs
 	ON dbcs.replica_id = dbrs.replica_id AND dbcs.group_database_id = dbrs.group_database_id
 WHERE ag.[name] = COALESCE(@AGName, ag.[name]);
 
+
+IF @SQLVersionMajor >= 13
+	UPDATE dx
+	SET dx.SecondaryLagInSeconds = dbrs.secondary_lag_seconds
+	FROM #Databases dx
+	INNER JOIN master.sys.dm_hadr_database_replica_cluster_states AS dbcs
+		ON dx.ReplicaID = dbcs.replica_id
+	LEFT JOIN master.sys.dm_hadr_database_replica_states AS dbrs
+		ON dbcs.replica_id = dbrs.replica_id AND dbcs.group_database_id = dbrs.group_database_id;
 
 /* 
 Trace flags in use globally 
@@ -994,7 +1003,7 @@ IF @Mode IN (1, 99) BEGIN
 		, IsSuspended
 		, IsFailoverReady
 		, COALESCE(DatabaseOwner, 'UNKNOWN') AS DatabaseOwner
-		, COALESCE(SecondaryLagInSeconds, 0) AS SecondaryLagInSeconds
+		, SecondaryLagInSeconds
 	FROM #Databases
 	ORDER BY
 		AGName
@@ -1154,7 +1163,7 @@ IF @Mode IN (0, 99) BEGIN
 		, 'We recommend raising the value to 15 or higher to improve AG stability.'
 		, 'https://straightpathsql.com/ca/availability-group-session-timeout'
 	FROM #Replicas 
-	WHERE SessionTimeout >= 10;
+	WHERE SessionTimeout <= 10;
 
 	/* backup preference not primary */
 	INSERT #Results	
@@ -1243,13 +1252,16 @@ IF @Mode IN (0, 99) BEGIN
 		, 421
 		, 1
 		, 'Replica is not failover ready'
-		, 'The database [' + DatabaseName + '] in [' + AGName + '] is not ready for failover.'
+		, 'The database [' + d.DatabaseName + '] in [' + d.AGName + '] is not ready for failover.'
 		, NULL
 		, 'If the primary replica is configured for automatic failover, you may not get the desired failover.'
 		, 'Check to see if any other secondary replicas are available for failover, and that they are SYNCHRONIZED.'
 		, 'https://straightpathsql.com/ca/replica-not-failover-ready'
-	FROM #Databases
-	WHERE IsFailoverReady <> 'Yes';
+	FROM #Databases d
+	INNER JOIN #Replicas r
+		ON d.ReplicaID = r.ReplicaID
+	WHERE d.IsFailoverReady <> 'Yes'
+		AND r.FailoverMode = 'AUTOMATIC';
 
 	/* high HADR_SYNC_COMMIT waits */
 	INSERT #Results	
@@ -1488,6 +1500,7 @@ IF @Mode IN (2) BEGIN
 		, PreviousState
 		, CurrentState
 	FROM #StateChanges
+	WHERE AGName = COALESCE(@AGName, AGName)
 	ORDER BY EventTimeStamp DESC;
 	END;
 
