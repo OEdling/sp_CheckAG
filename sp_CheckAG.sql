@@ -1029,7 +1029,7 @@ IF @Mode IN (0, 99) BEGIN
 		, 'We recommend setting endpoint ownership to ''sa'' to avoid connection issues.'
 		, 'https://straightpathsql.com/ca/endpoint-ownership'
 	FROM #Endpoints
-	WHERE EndpointOwner <> 'sa';
+	WHERE EndpointOwner <> SUSER_SNAME(0x01);
 
 	/* AG not owned by sa */
 	INSERT #Results
@@ -1044,7 +1044,7 @@ IF @Mode IN (0, 99) BEGIN
 		, 'We recommend setting availability group ownership to ''sa'' to avoid connection issues.'
 		, 'https://straightpathsql.com/ca/availability-group-ownership'
 	FROM #AvailabilityGroups
-	WHERE AGOwner <> 'sa';
+	WHERE AGOwner <> SUSER_SNAME(0x01);
 
 	/* Less than 3 quorum members online */
 	IF (SELECT COUNT(MemberName) FROM #ClusterMembers WHERE MemberState = 'UP' AND NumberOfQuorumVotes > 0) < 3
